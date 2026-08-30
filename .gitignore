@@ -1,0 +1,12 @@
+# Working notes — local only
+.notes/
+
+# Never commit: these hold live session credentials or real staff data
+session.json
+orgchart.json
+*.har
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
