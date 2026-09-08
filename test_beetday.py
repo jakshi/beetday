@@ -313,5 +313,30 @@ class CacheSchemaDrift(unittest.TestCase):
                 self.assertEqual(bd._load_cache_index(), {})
 
 
+class TenantIdDiscovery(unittest.TestCase):
+    NDJSON = "\n".join([
+        '{"type":"SearchResultSet","source":"workday_search:workday_tasks_and_reports","results":['
+        '{"instanceID":"2997$42","description":"Org Chart"},{"instanceID":"2998$43","description":"Org Chart"}]}',
+        '{"type":"SearchResultSet","source":"workday_search:workday_people","results":['
+        '{"instanceID":"247$1","description":"Ada Lovelace"}]}',
+    ])
+
+    def test_picks_only_matching_class_prefixes_in_order(self):
+        self.assertEqual(
+            bd.instance_ids_from_search_ndjson(self.NDJSON, bd.TASK_PREFIXES),
+            ["2997$42", "2998$43"],
+        )
+        self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("247$",)), ["247$1"])
+        self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("2500$",)), [])
+
+    def test_organization_from_profile_takes_last_breadcrumb_hop(self):
+        payload = {"body": {"compositeViewHeader": {"contactInfo": {
+            "organization": "Acme >> Engineering >> Engineering : Platform II (Grace Hopper)"}}}}
+        self.assertEqual(bd.organization_from_profile(payload), "Engineering : Platform II (Grace Hopper)")
+
+    def test_organization_from_profile_missing(self):
+        self.assertEqual(bd.organization_from_profile({}), "")
+
+
 if __name__ == "__main__":
     unittest.main()
