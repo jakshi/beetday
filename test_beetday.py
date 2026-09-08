@@ -158,6 +158,23 @@ class SessionExtraction(unittest.TestCase):
         self.assertEqual(session.user_agent, "HarUA")
 
 
+    def test_from_firefox_ansi_c_quoted_cookie(self):
+        # Firefox uses bash ANSI-C quoting ($'...') whenever a header value carries an
+        # escape; the \041 below decodes to "!".
+        command = (
+            "curl 'https://wd999.myworkday.com/acme/digital-adoption/global' \\\n"
+            "  --compressed \\\n"
+            "  -H 'User-Agent: Mozilla/5.0' \\\n"
+            "  -H 'Session-Secure-Token: tok-123' \\\n"
+            "  -H $'Cookie: lb=\\041abc; cke=\"quoted\"; JSESSIONID=xyz; UserSignedIn=1'"
+        )
+        session = bd.session_from_curl(command)
+        self.assertEqual(session.tenant, "acme")
+        self.assertEqual(session.session_secure_token, "tok-123")
+        self.assertIn("JSESSIONID=xyz", session.cookie)
+        self.assertIn("lb=!abc", session.cookie)
+
+
 class OrganizationChartCache(unittest.TestCase):
     def test_round_trip_and_search(self):
         people = [
