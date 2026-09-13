@@ -133,12 +133,30 @@ def _session_from_request(url: str, cookie: str, headers: dict[str, str]) -> Ses
     )
 
 
+_ANSI_C_QUOTED = re.compile(r"\$'((?:[^'\\]|\\.)*)'", re.S)
+
+
+def _decode_ansi_c_quoting(command: str) -> str:
+    """Rewrite bash ANSI-C quotes ($'...') into plain single quotes shlex understands.
+
+    Firefox emits them for any header holding an escape (a cookie with \\041, say),
+    and shlex.split treats the leading $ as part of the token, so the header name
+    comes out as "$'cookie" and the cookie is lost.
+    """
+
+    def rewrite(match: re.Match[str]) -> str:
+        body = match.group(1).encode("latin-1", "backslashreplace").decode("unicode_escape")
+        return "'" + body.replace("'", "'\\''") + "'"
+
+    return _ANSI_C_QUOTED.sub(rewrite, command)
+
+
 def session_from_curl(command: str) -> Session:
     """Build a session from a browser 'Copy as cURL' command."""
     headers: dict[str, str] = {}
     cookie = ""
     url = ""
-    tokens = iter(shlex.split(command))
+    tokens = iter(shlex.split(_decode_ansi_c_quoting(command)))
     for token in tokens:
         match token:
             case "-H" | "--header":
