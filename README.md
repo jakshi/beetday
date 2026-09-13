@@ -78,19 +78,24 @@ cache live in `~/.local/share/beetday`; override with `BEETDAY_HOME`.
 `find` folds diacritics, so `find nguyen` matches `Nguyễn` and `find cong`
 matches `Công`.
 
-## Tenant-specific constants
+## Tenant-specific ids
 
-The org-chart navigator endpoint wants three opaque ids that **differ per
-tenant**. The defaults at the top of `beetday.py` are placeholders and
-won't match yours. To find your own:
-
-1. Open your org chart in Workday with devtools **Network** recording.
-2. Find the `POST` to `/<tenant>/navigable/<id>.htmld`.
-3. Read `initial-step` and `navigable-instance-set-id` off the form body, and the
-   root org from the `<id>` in the path.
+The org-chart navigator needs two ids that **differ per tenant**: an "Org Chart"
+task, and your root supervisory organization. `beetday auth` finds both and stores
+them in the session, so there is nothing to configure:
 
 ```console
-$ beetday crawl --root 2500$9 --initial-step 2997$42 --instance-set-id 1$99
+$ pbpaste | beetday auth
+saved session for tenant 'acme' (worker 247$77) -> ~/.local/share/beetday/session.json
+discovered org chart task 2997$42, root org 2500$9
+```
+
+It searches your tenant for an Org Chart task, confirms the navigator actually
+accepts it, then walks `PARENT` up from your own org until there is no parent
+left. If discovery fails — an unusual tenant, a renamed task — override it:
+
+```console
+$ beetday crawl --root 2500$9 --initial-step 2997$42
 ```
 
 The `247$` / `2500$` prefixes in the source are Workday instance *class* ids

@@ -59,15 +59,11 @@ ORGANIZATION_CHART_FILE = BASE_DIRECTORY / "orgchart.json"
 # These two appear to be Workday-wide.
 WORKER_PREFIX = "247$"
 ORGANIZATION_PREFIX = "2500$"
-# Root supervisory organization and the org-chart "navigator" form constants the
-# navigable endpoint expects. These are PER TENANT — the values below are
-# placeholders and will not match yours. To rediscover them: open your org chart in
-# Workday, then in devtools Network find the POST to /<tenant>/navigable/<id>.htmld
-# and read `initial-step`, `navigable-instance-set-id` and the root `<id>` off the
-# form body. Override at the CLI with --root / --initial-step / --instance-set-id.
-ROOT_ORGANIZATION_ID = "2500$9"
-NAVIGATOR_INITIAL_STEP = "2997$42"
-NAVIGATOR_INSTANCE_SET_ID = "1$99"
+# The navigator form needs a per-tenant "Org Chart" task id, and a crawl needs the
+# root supervisory organization. Both are discovered by `beetday auth` and stored in
+# the session; --initial-step / --root override them. Tasks and reports carry these
+# instance-id class prefixes.
+TASK_PREFIXES = ("2997$", "2998$")
 # Context id for a worker profile: /<tenant>/inst/1$247/<worker>.htmld carries the email.
 WORKER_PROFILE_CONTEXT = "1$247"
 
@@ -102,6 +98,8 @@ class Session:
     session_secure_token: str = ""
     workday_client: str = ""
     user_agent: str = DEFAULT_USER_AGENT
+    navigator_initial_step: str = ""  # per tenant, discovered at auth
+    root_organization_id: str = ""
 
     def save(self, path: Path = SESSION_FILE) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +228,33 @@ def person_from_search_result(result: Json) -> Person:
         organization=organization,
         manager=manager_from_organization(organization),
     )
+
+
+def instance_ids_from_search_ndjson(text: str, prefixes: tuple[str, ...]) -> list[str]:
+    """Instance ids whose class prefix matches, in result order (tasks, orgs, ...)."""
+    found: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        block = json.loads(line)
+        if block.get("type") != "SearchResultSet":
+            continue
+        for result in block.get("results", []):
+            instance_id = str(result.get("instanceID") or "")
+            if instance_id.startswith(prefixes) and instance_id not in found:
+                found.append(instance_id)
+    return found
+
+
+def organization_from_profile(payload: Json) -> str:
+    """Worker profile -> the supervisory org they sit in, e.g. 'Eng : Platform II (Grace Hopper)'.
+
+    Workday renders it as a breadcrumb ('Acme >> Eng >> Eng : Platform II (...)'); only the
+    last hop names the org the worker actually belongs to.
+    """
+    header = (payload.get("body") or {}).get("compositeViewHeader") or {}
+    breadcrumb = ((header.get("contactInfo") or {}).get("organization") or "").strip()
+    return breadcrumb.split(">>")[-1].strip()
 
 
 def people_from_search_ndjson(text: str) -> list[Person]:
@@ -379,17 +404,11 @@ def tenant_relative_path(url: str) -> str:
 
 
 class WorkdayClient:
-    def __init__(
-        self,
-        session: Session,
-        initial_step: str = NAVIGATOR_INITIAL_STEP,
-        instance_set_id: str = NAVIGATOR_INSTANCE_SET_ID,
-    ):
+    def __init__(self, session: Session, initial_step: str = ""):
         import httpx  # deferred: keeps the parsing functions above dependency-free
 
         self.session = session
-        self.initial_step = initial_step  # per-tenant; see the constants at the top
-        self.instance_set_id = instance_set_id
+        self.initial_step = initial_step or session.navigator_initial_step
         self._httpx = httpx
         self._client = httpx.Client(
             base_url=session.base_url,
@@ -493,7 +512,6 @@ class WorkdayClient:
         body = {
             "initial-step": self.initial_step,
             "navigable-instance-iid": organization_id,
-            "navigable-instance-set-id": self.instance_set_id,
             "navigable-instance-did": "",
             "navigable-worker-iid": self.worker_id,
             "effective": "",
@@ -542,15 +560,73 @@ class WorkdayClient:
                 time.sleep(0.5 * 2 ** (attempt - 1))
         return None  # unreachable
 
+    def _search_instance_ids(self, query: str, prefixes: tuple[str, ...]) -> list[str]:
+        response = self._request(
+            "GET",
+            f"/wday/pex/fs/{self.session.tenant}/fs/v3/search",
+            params={"q": query},
+            headers={
+                "X_WD_CLIENT_ID": "SEARCH_CLIENT",
+                "Accept": "application/json, application/x-ndjson, */*",
+            },
+        )
+        return instance_ids_from_search_ndjson(response.text, prefixes)
+
+    def discover_organization_id(self) -> str:
+        """Any supervisory org id, used as a probe target: the one the user sits in."""
+        profile = self._json(
+            "GET", f"/{self.session.tenant}/inst/{WORKER_PROFILE_CONTEXT}/{self.worker_id}.htmld"
+        )
+        name = organization_from_profile(profile)
+        for organization_id in self._search_instance_ids(name, (ORGANIZATION_PREFIX,)) if name else []:
+            return organization_id
+        raise WorkdayError("could not find your supervisory organization; pass --root and --initial-step")
+
+    def discover_initial_step(self, organization_id: str) -> str:
+        """The navigator refuses without an Org Chart task id, and only accepts a real one.
+
+        Search names candidates; the only reliable test is whether the navigator accepts one,
+        so probe them. Read-only, and anything that is not an org chart simply fails.
+        """
+        for candidate in self._search_instance_ids("org chart", TASK_PREFIXES):
+            previous, self.initial_step = self.initial_step, candidate
+            try:
+                self.expand_organization(organization_id)
+            except WorkdayError:
+                self.initial_step = previous
+                continue
+            return candidate
+        raise WorkdayError("could not find an Org Chart task; pass --initial-step")
+
+    def discover_root_organization(self, organization_id: str) -> str:
+        """Walk PARENT up from any org; the node without a parent is the root."""
+        seen: set[str] = set()
+        while organization_id not in seen:
+            seen.add(organization_id)
+            parent = self.expand_organization(organization_id).parent
+            if not parent or not parent.instance_id:
+                return organization_id
+            organization_id = parent.instance_id
+        return organization_id
+
+    def discover_tenant_ids(self) -> tuple[str, str]:
+        """Return (initial_step, root_organization_id) for this tenant."""
+        organization_id = self.discover_organization_id()
+        initial_step = self.discover_initial_step(organization_id)
+        return initial_step, self.discover_root_organization(organization_id)
+
     def crawl(
         self,
-        root: str = ROOT_ORGANIZATION_ID,
+        root: str = "",
         delay: float = 0.3,
         report=None,
         checkpoint=None,
         checkpoint_every: int = 50,
         known_emails: dict[str, str] | None = None,
     ) -> tuple[list[Person], list[str], list[str]]:
+        root = root or self.session.root_organization_id
+        if not root:
+            raise WorkdayError("no root organization known; re-run `beetday auth` or pass --root")
         people: dict[str, Person] = {}
         visited: set[str] = set()
         failed: list[str] = []
@@ -721,8 +797,10 @@ def command_auth(args: argparse.Namespace) -> int:
     with WorkdayClient(session) as client:
         client.enrich()  # fills token/client version and proves the session is live
         worker = client.worker_id
+        session.navigator_initial_step, session.root_organization_id = client.discover_tenant_ids()
     session.save()
     print(f"saved session for tenant {session.tenant!r} (worker {worker}) -> {SESSION_FILE}")
+    print(f"discovered org chart task {session.navigator_initial_step}, root org {session.root_organization_id}")
     return 0
 
 
@@ -775,7 +853,7 @@ def command_crawl(args: argparse.Namespace) -> int:
         print(f"\r  {message:<72}", end="", file=sys.stderr, flush=True)
 
     known_emails = {p.worker_id: p.email for p in _load_cache_index().values() if p.email}
-    with _open_client(initial_step=args.initial_step, instance_set_id=args.instance_set_id) as client:
+    with _open_client(initial_step=args.initial_step) as client:
         people, failed_orgs, failed_emails = client.crawl(
             root=args.root,
             delay=args.delay,
@@ -826,9 +904,8 @@ def build_parser() -> argparse.ArgumentParser:
     chain.set_defaults(func=command_chain)
 
     crawl = subcommands.add_parser("crawl", help="crawl the whole org chart into the local cache")
-    crawl.add_argument("--root", default=ROOT_ORGANIZATION_ID, help="root supervisory organization id (per tenant)")
-    crawl.add_argument("--initial-step", default=NAVIGATOR_INITIAL_STEP, help="navigator form 'initial-step' id (per tenant)")
-    crawl.add_argument("--instance-set-id", default=NAVIGATOR_INSTANCE_SET_ID, help="navigator form 'navigable-instance-set-id' (per tenant)")
+    crawl.add_argument("--root", default="", help="root supervisory organization id (overrides the one found at auth)")
+    crawl.add_argument("--initial-step", default="", help="navigator 'initial-step' task id (overrides the one found at auth)")
     crawl.add_argument("--delay", type=float, default=0.3, help="seconds between calls (be polite)")
     crawl.set_defaults(func=command_crawl)
 
