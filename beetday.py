@@ -574,9 +574,7 @@ class WorkdayClient:
 
     def discover_organization_id(self) -> str:
         """Any supervisory org id, used as a probe target: the one the user sits in."""
-        profile = self._json(
-            "GET", f"/{self.session.tenant}/inst/{WORKER_PROFILE_CONTEXT}/{self.worker_id}.htmld"
-        )
+        profile = self._json("GET", f"/{self.session.tenant}/inst/{WORKER_PROFILE_CONTEXT}/{self.worker_id}.htmld")
         name = organization_from_profile(profile)
         for organization_id in self._search_instance_ids(name, (ORGANIZATION_PREFIX,)) if name else []:
             return organization_id
