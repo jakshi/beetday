@@ -10,3 +10,6 @@ orgchart.json
 __pycache__/
 *.py[cod]
 .venv/
+
+# Build output
+dist/

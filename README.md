@@ -33,15 +33,20 @@ care about, reasonably.
 
 ## Install
 
-Needs Python 3.14+ and [uv](https://docs.astral.sh/uv/). The script declares its
-own dependencies inline (PEP 723), so there is nothing to install:
+Needs Python 3.14+ and [uv](https://docs.astral.sh/uv/). Run it straight from PyPI:
 
 ```console
-$ chmod +x beetday.py
-$ ./beetday.py --help
+$ uvx beetday --help
 ```
 
-Drop it on your `PATH` as `beetday` if you want the short name.
+Or put `beetday` on your `PATH` with `uv tool install beetday`.
+
+It is also a single self-contained script that declares its own dependencies inline
+(PEP 723), so a checkout runs with nothing to install:
+
+```console
+$ ./beetday.py --help
+```
 
 ## Auth
 
@@ -110,6 +115,15 @@ $ python3 -m unittest test_beetday -v
 Tests cover the pure parsing, caching and session-extraction layers; the network
 layer is exercised by hand against a live session. Every fixture is invented — no
 real person, tenant or host appears in this repo.
+
+To release, bump `version` in `pyproject.toml`, merge, then tag that commit:
+
+```console
+$ git tag -a v0.1.0 -m v0.1.0 && git push origin v0.1.0
+```
+
+The tag runs `.github/workflows/publish.yml`, which tests, builds, smoke-tests and
+publishes to PyPI through trusted publishing — there is no token to manage.
 
 ## Caveats
 
