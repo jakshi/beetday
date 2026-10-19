@@ -158,17 +158,14 @@ class SessionExtraction(unittest.TestCase):
         self.assertEqual(session.session_secure_token, "tok-xyz")
         self.assertEqual(session.user_agent, "HarUA")
 
-
     def test_from_firefox_ansi_c_quoted_cookie(self):
         # Firefox uses bash ANSI-C quoting ($'...') whenever a header value carries an
         # escape; the \041 below decodes to "!".
-        command = (
-            "curl 'https://wd999.myworkday.com/acme/digital-adoption/global' \\\n"
-            "  --compressed \\\n"
-            "  -H 'User-Agent: Mozilla/5.0' \\\n"
-            "  -H 'Session-Secure-Token: tok-123' \\\n"
-            "  -H $'Cookie: lb=\\041abc; cke=\"quoted\"; JSESSIONID=xyz; UserSignedIn=1'"
-        )
+        command = r"""curl 'https://wd999.myworkday.com/acme/digital-adoption/global' \
+  --compressed \
+  -H 'User-Agent: Mozilla/5.0' \
+  -H 'Session-Secure-Token: tok-123' \
+  -H $'Cookie: lb=\041abc; cke="quoted"; JSESSIONID=xyz; UserSignedIn=1'"""
         session = bd.session_from_curl(command)
         self.assertEqual(session.tenant, "acme")
         self.assertEqual(session.session_secure_token, "tok-123")
@@ -332,12 +329,12 @@ class CacheSchemaDrift(unittest.TestCase):
 
 
 class TenantIdDiscovery(unittest.TestCase):
-    NDJSON = "\n".join([
-        '{"type":"SearchResultSet","source":"workday_search:workday_tasks_and_reports","results":['
-        '{"instanceID":"2997$900042","description":"Org Chart"},{"instanceID":"2998$900043","description":"Org Chart"}]}',
-        '{"type":"SearchResultSet","source":"workday_search:workday_people","results":['
-        '{"instanceID":"247$900001","description":"Ada Lovelace"}]}',
-    ])
+    NDJSON = "\n".join(
+        [
+            '{"type":"SearchResultSet","source":"workday_search:workday_tasks_and_reports","results":[{"instanceID":"2997$900042","description":"Org Chart"},{"instanceID":"2998$900043","description":"Org Chart"}]}',
+            '{"type":"SearchResultSet","source":"workday_search:workday_people","results":[{"instanceID":"247$900001","description":"Ada Lovelace"}]}',
+        ]
+    )
 
     def test_picks_only_matching_class_prefixes_in_order(self):
         self.assertEqual(
@@ -348,8 +345,7 @@ class TenantIdDiscovery(unittest.TestCase):
         self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("2500$",)), [])
 
     def test_organization_from_profile_takes_last_breadcrumb_hop(self):
-        payload = {"body": {"compositeViewHeader": {"contactInfo": {
-            "organization": "Acme >> Engineering >> Engineering : Platform II (Grace Hopper)"}}}}
+        payload = {"body": {"compositeViewHeader": {"contactInfo": {"organization": "Acme >> Engineering >> Engineering : Platform II (Grace Hopper)"}}}}
         self.assertEqual(bd.organization_from_profile(payload), "Engineering : Platform II (Grace Hopper)")
 
     def test_organization_from_profile_missing(self):
