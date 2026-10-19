@@ -752,7 +752,7 @@ def _load_cache_index() -> dict[str, Person]:
         return {}
     try:  # pass the path rather than lean on the default, which froze at import time
         return {person.worker_id: person for person in load_organization_chart(ORGANIZATION_CHART_FILE)}
-    except (OSError, ValueError, KeyError, TypeError):  # TypeError: cache written by a different field set
+    except OSError, ValueError, KeyError, TypeError:  # TypeError: cache written by a different field set
         return {}
 
 
