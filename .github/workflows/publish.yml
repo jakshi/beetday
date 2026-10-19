@@ -31,7 +31,9 @@ jobs:
         run: uv run --no-project python -m unittest -v test_beetday
 
       - name: Build
-        run: uv build
+        run: |
+          uv build
+          test -f "dist/beetday-${GITHUB_REF_NAME#v}.tar.gz"
 
       # The console script resolving from each distribution is the smoke test.
       - name: Smoke test (wheel)
