@@ -1,2 +1,27 @@
+[project]
+name = "beetday"
+version = "0.1.0"
+description = "A small client for your own Workday tenant's org chart — live search, management chains, and an offline org-chart cache"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Paul Tobias" }, { name = "Kostiantyn Lysenko" }]
+# Keep in step with the PEP 723 block at the top of beetday.py, which serves `./beetday.py`.
+dependencies = ["httpx>=0.28"]
+
+[project.scripts]
+beetday = "beetday:main"
+
+[project.urls]
+Repository = "https://github.com/jakshi/beetday"
+
+[build-system]
+# flit_core, not uv_build: uv_build only packages directories (beetday/__init__.py), and
+# beetday is deliberately one file. flit's sdist is also an allowlist — module, pyproject,
+# README, LICENSE — so nothing untracked in the checkout can reach PyPI.
+requires = ["flit_core >=3.11,<5"]
+build-backend = "flit_core.buildapi"
+
 [tool.ruff]
 line-length = 320
