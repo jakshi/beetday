@@ -54,7 +54,7 @@ drops after roughly 90 minutes idle — expect to redo this.
 
 ```console
 $ pbpaste | beetday auth
-saved session for tenant 'acme' (worker 247$77) -> ~/.local/share/beetday/session.json
+saved session for tenant 'acme' (worker 247$900077) -> ~/.local/share/beetday/session.json
 ```
 
 Or point it at a saved HAR capture: `beetday auth --har ~/Downloads/workday.har`.
@@ -86,8 +86,8 @@ them in the session, so there is nothing to configure:
 
 ```console
 $ pbpaste | beetday auth
-saved session for tenant 'acme' (worker 247$77) -> ~/.local/share/beetday/session.json
-discovered org chart task 2997$42, root org 2500$9
+saved session for tenant 'acme' (worker 247$900077) -> ~/.local/share/beetday/session.json
+discovered org chart task 2997$900042, root org 2500$900009
 ```
 
 It searches your tenant for an Org Chart task, confirms the navigator actually
@@ -95,7 +95,7 @@ accepts it, then walks `PARENT` up from your own org until there is no parent
 left. If discovery fails — an unusual tenant, a renamed task — override it:
 
 ```console
-$ beetday crawl --root 2500$9 --initial-step 2997$42
+$ beetday crawl --root 2500$900009 --initial-step 2997$900042
 ```
 
 The `247$` / `2500$` prefixes in the source are Workday instance *class* ids

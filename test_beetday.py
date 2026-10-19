@@ -10,6 +10,7 @@ The network layer is exercised separately against a live session.
 Every fixture below is invented. Names are famous-dead-computer-scientist
 placeholders, addresses use the reserved `example.com` domain, and the tenant is
 `acme` on `wd999.myworkday.com` — no real person, tenant or host appears here.
+Ids are invented as `<class>$9NNNNN`; keep new fixtures in that range so they stay clearly fake.
 """
 
 import json
@@ -38,10 +39,10 @@ class ManagerFromOrganization(unittest.TestCase):
 class SearchNdjson(unittest.TestCase):
     NDJSON = (
         '{"type":"UserTypes","manager":{"meetsCriteria":false}}\n'
-        '{"type":"SearchResultSet","source":"workday_search:workday_staffing","results":[{"instanceID":"247$101","description":"Alan Turing","subtitle1":"Senior Tech Lead","subtitle2":"Engineering : Platform II (Grace Hopper)","subtitle3":"London"}]}\n'
+        '{"type":"SearchResultSet","source":"workday_search:workday_staffing","results":[{"instanceID":"247$900101","description":"Alan Turing","subtitle1":"Senior Tech Lead","subtitle2":"Engineering : Platform II (Grace Hopper)","subtitle3":"London"}]}\n'
         # same person from another source -> must de-duplicate; an org result -> must be ignored
-        '{"type":"SearchResultSet","source":"workday_search:workday_people","results":[{"instanceID":"247$101","description":"Alan Turing","subtitle1":"Senior Tech Lead"}]}\n'
-        '{"type":"SearchResultSet","source":"workday_search:workday_organizations","results":[{"instanceID":"2500$11","description":"Engineering : Platform II (Grace Hopper)"}]}\n'
+        '{"type":"SearchResultSet","source":"workday_search:workday_people","results":[{"instanceID":"247$900101","description":"Alan Turing","subtitle1":"Senior Tech Lead"}]}\n'
+        '{"type":"SearchResultSet","source":"workday_search:workday_organizations","results":[{"instanceID":"2500$900011","description":"Engineering : Platform II (Grace Hopper)"}]}\n'
     )
 
     def test_parses_dedupes_and_filters_to_people(self):
@@ -49,7 +50,7 @@ class SearchNdjson(unittest.TestCase):
         self.assertEqual(len(people), 1)
         person = people[0]
         self.assertEqual(person.name, "Alan Turing")
-        self.assertEqual(person.worker_id, "247$101")
+        self.assertEqual(person.worker_id, "247$900101")
         self.assertEqual(person.title, "Senior Tech Lead")
         self.assertEqual(person.location, "London")
         self.assertEqual(person.manager, "Grace Hopper")
@@ -77,9 +78,9 @@ class NavigatorParsing(unittest.TestCase):
                     "navigatorContainerNodeType": "SELF",
                     "navigatorDetails": [
                         _detail(
-                            "2500$11",
+                            "2500$900011",
                             "Engineering : Platform II (Grace Hopper)",
-                            "247$102",
+                            "247$900102",
                             "Grace Hopper",
                             "Senior Engineering Manager",
                             "London",
@@ -91,8 +92,8 @@ class NavigatorParsing(unittest.TestCase):
                     "navigatorContainerNodeType": "CHILD_NODES_AND_LEAVES",
                     "count": 2,
                     "navigatorDetails": [
-                        _detail("247$101", "Alan Turing", "247$101", "Alan Turing", "Senior Tech Lead", "London", False),
-                        _detail("2500$12", "Sub Team (Katherine Johnson)", "247$103", "Katherine Johnson", "Engineering Manager", "Cambridge", True),
+                        _detail("247$900101", "Alan Turing", "247$900101", "Alan Turing", "Senior Tech Lead", "London", False),
+                        _detail("2500$900012", "Sub Team (Katherine Johnson)", "247$900103", "Katherine Johnson", "Engineering Manager", "Cambridge", True),
                     ],
                 },
             ]
@@ -102,7 +103,7 @@ class NavigatorParsing(unittest.TestCase):
     def test_self_child_and_kinds(self):
         response = bd.parse_navigator_response(self.PAYLOAD)
         self.assertEqual(response.self_node.owner_name, "Grace Hopper")
-        self.assertEqual(response.self_node.instance_id, "2500$11")
+        self.assertEqual(response.self_node.instance_id, "2500$900011")
         self.assertEqual(response.child_count, 2)
         self.assertEqual(len(response.children), 2)
 
@@ -115,7 +116,7 @@ class NavigatorParsing(unittest.TestCase):
 
         self.assertTrue(suborg.is_organization)
         self.assertTrue(suborg.has_children)
-        self.assertEqual(suborg.instance_id, "2500$12")
+        self.assertEqual(suborg.instance_id, "2500$900012")
 
 
 class SessionExtraction(unittest.TestCase):
@@ -178,8 +179,8 @@ class SessionExtraction(unittest.TestCase):
 class OrganizationChartCache(unittest.TestCase):
     def test_round_trip_and_search(self):
         people = [
-            bd.Person("Ada Lovelace", "247$1", title="Engineer", organization="Eng (Boss)", location="London"),
-            bd.Person("Bob Stone", "247$2", title="Designer", organization="Design (Boss)", location="Berlin"),
+            bd.Person("Ada Lovelace", "247$900001", title="Engineer", organization="Eng (Boss)", location="London"),
+            bd.Person("Bob Stone", "247$900002", title="Designer", organization="Design (Boss)", location="Berlin"),
         ]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "orgchart.json"
@@ -240,21 +241,21 @@ class FormatPerson(unittest.TestCase):
     def test_shows_person_email_and_manager_email(self):
         turing = bd.Person(
             "Alan Turing",
-            "247$101",
+            "247$900101",
             title="Senior Tech Lead",
             organization="Engineering : Platform II (Grace Hopper)",
             location="London",
             manager="Grace Hopper",
-            manager_id="247$102",
+            manager_id="247$900102",
             email="alan@example.com",
         )
-        hopper = bd.Person("Grace Hopper", "247$102", email="grace@example.com")
+        hopper = bd.Person("Grace Hopper", "247$900102", email="grace@example.com")
         line = bd._format_person(turing, {p.worker_id: p for p in (turing, hopper)})
         self.assertIn("Alan Turing <alan@example.com>", line)
         self.assertIn("Grace Hopper <grace@example.com>", line)
 
     def test_falls_back_to_names_without_emails(self):
-        line = bd._format_person(bd.Person("A", "247$1", manager="B", manager_id="247$2"))
+        line = bd._format_person(bd.Person("A", "247$900001", manager="B", manager_id="247$900002"))
         self.assertIn("A", line)
         self.assertIn("B", line)
         self.assertNotIn("<", line)
@@ -264,13 +265,13 @@ class DiacriticSearch(unittest.TestCase):
     PEOPLE: ClassVar[list] = [
         bd.Person(
             "Nguyễn Văn Bảo",
-            "247$401",
+            "247$900401",
             title="Technical Lead",
             location="Ha Noi",
             organization="Engineering : Infra & Security III.I (Katherine Johnson)",
             email="baonv1@example.com",
         ),
-        bd.Person("Chee Bao Lim", "247$402", title="Senior Software Engineer", email="lim@example.com"),
+        bd.Person("Chee Bao Lim", "247$900402", title="Senior Software Engineer", email="lim@example.com"),
     ]
 
     def test_fold_strips_vietnamese_diacritics(self):
@@ -318,7 +319,7 @@ class CacheSchemaDrift(unittest.TestCase):
     def test_unknown_person_field_degrades_to_empty_index(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "orgchart.json"
-            path.write_text(json.dumps({"people": [{"name": "A", "worker_id": "247$1", "phone": "123"}]}))
+            path.write_text(json.dumps({"people": [{"name": "A", "worker_id": "247$900001", "phone": "123"}]}))
             with mock.patch.object(bd, "ORGANIZATION_CHART_FILE", path):
                 self.assertEqual(bd._load_cache_index(), {})
 
@@ -333,17 +334,17 @@ class CacheSchemaDrift(unittest.TestCase):
 class TenantIdDiscovery(unittest.TestCase):
     NDJSON = "\n".join([
         '{"type":"SearchResultSet","source":"workday_search:workday_tasks_and_reports","results":['
-        '{"instanceID":"2997$42","description":"Org Chart"},{"instanceID":"2998$43","description":"Org Chart"}]}',
+        '{"instanceID":"2997$900042","description":"Org Chart"},{"instanceID":"2998$900043","description":"Org Chart"}]}',
         '{"type":"SearchResultSet","source":"workday_search:workday_people","results":['
-        '{"instanceID":"247$1","description":"Ada Lovelace"}]}',
+        '{"instanceID":"247$900001","description":"Ada Lovelace"}]}',
     ])
 
     def test_picks_only_matching_class_prefixes_in_order(self):
         self.assertEqual(
             bd.instance_ids_from_search_ndjson(self.NDJSON, bd.TASK_PREFIXES),
-            ["2997$42", "2998$43"],
+            ["2997$900042", "2998$900043"],
         )
-        self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("247$",)), ["247$1"])
+        self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("247$",)), ["247$900001"])
         self.assertEqual(bd.instance_ids_from_search_ndjson(self.NDJSON, ("2500$",)), [])
 
     def test_organization_from_profile_takes_last_breadcrumb_hop(self):
