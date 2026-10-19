@@ -3,6 +3,7 @@
 # requires-python = ">=3.14"
 # dependencies = ["httpx>=0.28"]
 # ///
+# Copyright (C) 2026  Paul Tobias
 # Copyright (C) 2026  Kostiantyn Lysenko
 #
 # This program is free software: you can redistribute it and/or modify it under
