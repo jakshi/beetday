@@ -120,6 +120,6 @@ email enrichment. It checkpoints as it goes and resumes from cached emails.
 
 ## License
 
-[GNU AGPL-3.0-or-later](LICENSE). Forks and modified versions stay under the same
+[GNU AGPL-3.0-only](LICENSE). Forks and modified versions stay under the same
 license, and if you offer a modified version to users over a network you must
 offer them its source too.
