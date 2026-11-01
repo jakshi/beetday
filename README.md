@@ -17,6 +17,9 @@ Ada Lovelace — Senior Tech Lead
     →Katherine Johnson — VP Engineering
 ```
 
+beetday is not affiliated with, endorsed by, or supported by Workday, Inc.
+Workday is a trademark of Workday, Inc.
+
 ## Before you use it
 
 This talks to your employer's HR system with your own logged-in session. It sees
